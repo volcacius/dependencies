@@ -16,9 +16,9 @@ class _NestedInjectorSpec:
 
     def __call__(self, __self__):
 
-        subclass = type(self.injector.__name__, (self.injector,), {})
         parent = injectable, ref(__self__), {}
-        subclass.__dependencies__["__parent__"] = parent
+        subclass = type(self.injector.__name__, (self.injector,), {})
+        subclass.__dependencies__.specs["__parent__"] = parent
         return subclass
 
     @property

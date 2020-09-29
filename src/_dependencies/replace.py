@@ -10,7 +10,7 @@ def _deep_replace_dependency(injector, current_attr, replace):
     spec = (marker, attribute, args)
 
     for base in injector.__mro__:
-        if current_attr in base.__dependencies__:
-            base.__dependencies__[current_attr] = spec
+        if base.__dependencies__.has(current_attr):
+            base.__dependencies__.set(current_attr, spec)
         else:
             break

@@ -13,7 +13,7 @@ class _InjectorType(_InjectorTypeType):
     def __new__(cls, class_name, bases, namespace):
 
         if not bases:
-            namespace["__dependencies__"] = {}
+            namespace["__dependencies__"] = _Graph()
             namespace["__wrapped__"] = None  # Doctest module compatibility.
             namespace["_subs_tree"] = None  # Typing module compatibility.
             return type.__new__(cls, class_name, bases, namespace)
@@ -25,15 +25,11 @@ class _InjectorType(_InjectorTypeType):
                 ns[attr] = namespace.pop(attr)
             except KeyError:
                 pass
-        for name in namespace:
-            _check_dunder_name(name)
-        dependencies = {}
+        dependencies = _Graph()
         for base in reversed(bases):
             dependencies.update(base.__dependencies__)
         for name, dep in namespace.items():
-            dependencies[name] = _make_dependency_spec(name, dep)
-        _check_loops(class_name, dependencies)
-        _check_circles(dependencies)
+            dependencies.set(name, _make_dependency_spec(name, dep))
         ns["__dependencies__"] = dependencies
         return type.__new__(cls, class_name, bases, ns)
 
@@ -77,8 +73,6 @@ class _InjectorType(_InjectorTypeType):
                     cache[current_attr] = attribute(**kwargs)
                 except _Replace as replace:
                     _deep_replace_dependency(cls, current_attr, replace)
-                    _check_loops(cls.__name__, cls.__dependencies__)
-                    _check_circles(cls.__dependencies__)
                     continue
 
                 cached.add(current_attr)
@@ -105,7 +99,7 @@ class _InjectorType(_InjectorTypeType):
 
     def __contains__(cls, attrname):
 
-        return attrname in cls.__dependencies__
+        return cls.__dependencies__.has(attrname)
 
     def __and__(cls, other):
 
@@ -115,9 +109,28 @@ class _InjectorType(_InjectorTypeType):
 
         parent = set(dir(cls.__base__))
         current = set(cls.__dict__) - {"__dependencies__", "__wrapped__", "_subs_tree"}
-        dependencies = set(cls.__dependencies__) - {"__parent__"}
+        dependencies = set(cls.__dependencies__.specs) - {"__parent__"}
         attributes = sorted(parent | current | dependencies)
         return attributes
+
+
+class _Graph:
+    def __init__(self):
+        self.specs = {}
+
+    def get(self, name):
+        return self.specs.get(name)
+
+    def set(self, name, spec):
+        _check_dunder_name(name)
+        self.specs[name] = spec
+        _check_circles(self.specs, name, name)
+
+    def has(self, name):
+        return name in self.specs
+
+    def update(self, graph):
+        self.specs.update(graph.specs)
 
 
 class Injector(metaclass=_InjectorType):
@@ -127,3 +140,11 @@ class Injector(metaclass=_InjectorType):
     it namespace.
 
     """
+
+
+# FIXME: The attrs_stack should be a deque.  Store has attrs in it
+# also.  Restore it on pop.
+#
+# FIXME: Make cache a special object?
+#
+# FIXME: Make __dependencies__ graph a special object?
